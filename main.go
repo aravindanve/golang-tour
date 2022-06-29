@@ -26,6 +26,29 @@ var (
 	z      complex128 = cmplx.Sqrt(-5 + 12i)
 )
 
+type MyFloat float64
+
+func (f MyFloat) Abs() float64 {
+	if f < 0 {
+		return float64(-f)
+	}
+	return float64(f)
+}
+
+type Vertex struct {
+	X float64
+	Y float64
+}
+
+func (v *Vertex) Abs() float64 {
+	return math.Sqrt(v.X*v.X + v.Y*v.Y)
+}
+
+func (v *Vertex) Scale(f float64) {
+	v.X = v.X * f
+	v.Y = v.Y * f
+}
+
 func needInt(x int) int { return x*10 + 1 }
 func needFloat(x float64) float64 {
 	return x * 0.1
@@ -146,10 +169,6 @@ func main() {
 	q := &s
 	fmt.Println(*q + " Aravindan!")
 
-	type Vertex struct {
-		X int
-		Y int
-	}
 	fmt.Println(Vertex{1, 2})
 
 	v := Vertex{1, 2}
@@ -393,4 +412,45 @@ func main() {
 		}
 		return m
 	})
+
+	adder := func() func(int) int {
+		sum := 0
+		return func(x int) int {
+			sum += x
+			return sum
+		}
+	}
+
+	pos, neg := adder(), adder()
+	for i := 0; i < 10; i++ {
+		fmt.Println(
+			pos(i),
+			neg(-2*i),
+		)
+	}
+
+	fibonacci := func() func() int {
+		n2, n1 := -1, 1
+		return func() int {
+			n0 := n2 + n1
+			n2 = n1
+			n1 = n0
+			return n0
+		}
+	}
+
+	f1 := fibonacci()
+	for i := 0; i < 10; i++ {
+		fmt.Println(f1())
+	}
+
+	v2 := Vertex{3, 4}
+	fmt.Println("v2.Abs()", v2.Abs())
+
+	f2 := MyFloat(-math.Sqrt2)
+	fmt.Println("f2.Abs()", f2.Abs())
+
+	v3 := Vertex{3, 4}
+	v3.Scale(10)
+	fmt.Println("v3.Scale(10)", v3.Abs())
 }
