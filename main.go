@@ -2,13 +2,18 @@ package main
 
 import (
 	"fmt"
+	"image"
+	"image/color"
+	"io"
 	"math"
 	"math/cmplx"
 	"math/rand"
+	"os"
 	"runtime"
 	"strings"
 	"time"
 
+	"golang.org/x/tour/tree"
 	"golang.org/x/tour/wc"
 )
 
@@ -35,6 +40,10 @@ func (f MyFloat) Abs() float64 {
 	return float64(f)
 }
 
+type Abser interface {
+	Abs() float64
+}
+
 type Vertex struct {
 	X float64
 	Y float64
@@ -54,7 +63,16 @@ func needFloat(x float64) float64 {
 	return x * 0.1
 }
 
-func Sqrt(x float64) float64 {
+type ErrNegativeSqrt float64
+
+func (e ErrNegativeSqrt) Error() string {
+	return fmt.Sprintf("cannot Sqrt negative number: %v", float64(e))
+}
+
+func Sqrt(x float64) (float64, error) {
+	if x < 0 {
+		return 0, ErrNegativeSqrt(x)
+	}
 	z := float64(1)
 	i := 0
 	for {
@@ -70,7 +88,170 @@ func Sqrt(x float64) float64 {
 			break
 		}
 	}
-	return z
+	return z, nil
+}
+
+func describe(i interface{}) {
+	fmt.Printf("(%v, %T)\n", i, i)
+}
+
+func returnMultiple() (int, int) {
+	return 1, 2
+}
+
+type MyFunctionOptions struct {
+	Name           string
+	Age            int
+	withNameAndAge func(nameAndAge string)
+}
+
+func MyFunction(options MyFunctionOptions) {
+	if options.Name == "" {
+		options.Name = "Default Name"
+	}
+	if options.Age == 0 {
+		options.Age = 25
+	}
+	if options.withNameAndAge != nil {
+		options.withNameAndAge(fmt.Sprint(options.Name, " ", options.Age))
+	}
+}
+
+type Person struct {
+	Name string
+	Age  int
+}
+
+func (p Person) String() string {
+	return fmt.Sprintf("%v (%v years)", p.Name, p.Age)
+}
+
+type IPAddr [4]byte
+
+func (ipaddr IPAddr) String() string {
+	result := ""
+	for i, v := range ipaddr {
+		result += fmt.Sprintf("%d", v)
+		if i != len(ipaddr)-1 {
+			result += "."
+		}
+	}
+	return result
+}
+
+type rot13Reader struct {
+	r io.Reader
+}
+
+func (r rot13Reader) Read(b []byte) (int, error) {
+	n, err := r.r.Read(b)
+	if err == nil {
+		for i := range b[:n] {
+			if b[i] >= 'A' && b[i] <= 'Z' {
+				b[i] = 'A' + (b[i]-'A'+13)%26
+			} else if b[i] >= 'a' && b[i] <= 'z' {
+				b[i] = 'a' + (b[i]-'a'+13)%26
+			}
+		}
+	}
+	return n, err
+}
+
+type Image struct {
+	w int
+	h int
+}
+
+func (m Image) Bounds() image.Rectangle {
+	return image.Rect(0, 0, m.w, m.h)
+}
+
+func (m Image) ColorModel() color.Model {
+	return color.RGBAModel
+}
+
+func (m Image) At(x, y int) color.Color {
+	r := uint8((x + y) / 2)
+	g := uint8(x * y)
+	return color.RGBA{r, g, 255, 255}
+}
+
+func Index[T comparable](s []T, x T) int {
+	for i, v := range s {
+		if v == x {
+			return i
+		}
+	}
+	return -1
+}
+
+type List[T any] struct {
+	next *List[T]
+	val  T
+}
+
+func (l List[any]) String() string {
+	if l.next == nil {
+		return fmt.Sprintf("%v", l.val)
+	} else {
+		return fmt.Sprintf("%v -> %v", l.val, l.next)
+	}
+}
+
+type Stack[T any] struct {
+	Value    T
+	Previous *Stack[T]
+}
+
+func Push[T any](s *Stack[T], t T) *Stack[T] {
+	return &Stack[T]{Value: t, Previous: s}
+}
+
+func Pop[T any](s *Stack[T]) (*Stack[T], T) {
+	return s.Previous, s.Value
+}
+
+// Walk walks the tree t sending all values
+// from the tree to the channel ch.
+func Walk(t *tree.Tree, ch chan int) {
+	var s *Stack[*tree.Tree]
+	n := t
+	for n != nil {
+		s = Push(s, n)
+		n = n.Left
+	}
+	for s != nil {
+		s, n = Pop(s)
+		ch <- n.Value
+		if n.Right != nil {
+			n = n.Right
+			for n != nil {
+				s = Push(s, n)
+				n = n.Left
+			}
+		}
+	}
+	close(ch)
+}
+
+// Same determines whether the trees
+// t1 and t2 contain the same values.
+func Same(t1, t2 *tree.Tree) bool {
+	c1 := make(chan int)
+	c2 := make(chan int)
+
+	go Walk(t1, c1)
+	go Walk(t2, c2)
+
+	for {
+		i1, ok1 := <-c1
+		i2, ok2 := <-c2
+		if !ok1 && !ok2 {
+			return true
+		} else if ok1 != ok2 || i1 != i2 {
+			return false
+		}
+	}
 }
 
 func main() {
@@ -121,7 +302,8 @@ func main() {
 	fmt.Printf("-0 == 0: %v\n", -0 == 0)
 
 	x := rand.Float64() * 500
-	fmt.Printf("Sqrt(%v), Me (%v) vs math (%v)\n", x, Sqrt(x), math.Sqrt(x))
+	sqrt, _ := Sqrt(x)
+	fmt.Printf("Sqrt(%v), Me (%v) vs math (%v)\n", x, sqrt, math.Sqrt(x))
 
 	switch os := runtime.GOOS; os {
 	case "darwin":
@@ -453,4 +635,235 @@ func main() {
 	v3 := Vertex{3, 4}
 	v3.Scale(10)
 	fmt.Println("v3.Scale(10)", v3.Abs())
+
+	var a1 Abser
+	a1 = &Vertex{3, 4}
+	fmt.Printf("a1: %v\n", a1.Abs())
+
+	v4 := Vertex{3, 4}
+	(&v4).X = 1
+	p5 := &v4
+	v4.Abs()
+	(*p5).Abs()
+
+	// defer func() {
+	// 	if r := recover(); r != nil {
+	// 		fmt.Printf("Recovered from %v\n", r)
+	// 	}
+	// }()
+
+	// var v5 *Vertex = nil
+	// fmt.Printf("v5.Abs(): %v\n", v5.Abs())
+
+	var v6 Vertex
+	v6.Abs()
+
+	// var a2 Abser
+	// a2.Abs()
+
+	describe(v6)
+
+	x1, y1 := returnMultiple()
+	fmt.Printf("x1: %v, y1: %v\n", x1, y1)
+
+	var i7 interface{} = "hello"
+
+	s3 := i7.(string)
+	fmt.Println(s3)
+
+	s3, ok = i7.(string)
+	fmt.Println(s3, ok)
+
+	f5, ok := i7.(float64)
+	fmt.Println(f5, ok)
+
+	// f5 = i7.(float64) // panic
+	// fmt.Println(f5)
+
+	switch v := i7.(type) {
+	case int:
+		fmt.Printf("Twice %v is %v\n", v, v*2)
+	case string:
+		fmt.Printf("%q is %v bytes long\n", v, len(v))
+	default:
+		fmt.Printf("I don't know about type %T!\n", v)
+	}
+
+	MyFunction(MyFunctionOptions{})
+	MyFunction(MyFunctionOptions{Name: "Aravindan"})
+	MyFunction(MyFunctionOptions{Age: 30})
+	MyFunction(MyFunctionOptions{withNameAndAge: func(nameAndAge string) {
+		fmt.Println("Name and Age:", nameAndAge)
+	}})
+	MyFunction(MyFunctionOptions{Name: "Aravindan", withNameAndAge: func(nameAndAge string) {
+		fmt.Println("Name and Age:", nameAndAge)
+	}})
+	MyFunction(MyFunctionOptions{Age: 30, withNameAndAge: func(nameAndAge string) {
+		fmt.Println("Name and Age:", nameAndAge)
+	}})
+
+	var fn func()
+	describe(fn)
+	fmt.Println("fn == nil", fn == nil)
+
+	var i3 interface{}
+	describe(i3)
+	fmt.Println("i3 == nil", i3 == nil)
+
+	hosts := map[string]IPAddr{
+		"loopback":  {127, 0, 0, 1},
+		"googleDNS": {8, 8, 8, 8},
+	}
+	for name, ip := range hosts {
+		fmt.Printf("%v: %v\n", name, ip)
+	}
+
+	fmt.Printf("io.EOF: %v\n", io.EOF.Error())
+
+	r1 := strings.NewReader("Hello, Reader!")
+
+	b := make([]byte, 8)
+	for {
+		n, err := r1.Read(b)
+		fmt.Printf("n = %v err = %v b = %v\n", n, err, b)
+		fmt.Printf("b[:n] = %q\n", b[:n])
+		if err == io.EOF {
+			break
+		}
+	}
+
+	fmt.Printf("'A': %v\n", 'A')
+
+	s6 := strings.NewReader("Lbh penpxrq gur pbqr!")
+	r6 := rot13Reader{s6}
+	io.Copy(os.Stdout, &r6)
+
+	im1 := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	fmt.Println(im1.Bounds())
+	fmt.Println(im1.At(0, 0).RGBA())
+
+	// im2 := Image{100, 100}
+	// pic.ShowImage(im2)
+
+	// Index works on a slice of ints
+	si := []int{10, 20, 15, -10}
+	fmt.Println(Index(si, 15))
+
+	// Index also works on a slice of strings
+	ss := []string{"foo", "bar", "baz"}
+	fmt.Println(Index(ss, "hello"))
+
+	list1 := List[int]{val: 1}
+	describe(list1)
+
+	list2 := List[int]{val: 0}
+	for l, i := &list2, 1; i < 10; i++ {
+		l.next = &List[int]{val: i}
+		l = l.next
+	}
+	fmt.Println(list2)
+
+	go func() { fmt.Println(" world!") }()
+	fmt.Print("hello")
+	time.Sleep(100 * time.Millisecond)
+
+	c1 := make(chan string, 2)
+
+	go func() {
+		time.Sleep(1000 * time.Millisecond)
+		c1 <- "hello after sometime!"
+	}()
+
+	go func() {
+		time.Sleep(2000 * time.Millisecond)
+		c1 <- "hello after more time!"
+	}()
+
+	x2, x3 := <-c1, <-c1
+	fmt.Printf("x2: %v, x3: %v\n", x2, x3)
+
+	fibonacci2 := func(n int, c chan int) {
+		x, y := 0, 1
+		for i := 0; i < n; i++ {
+			c <- x
+			x, y = y, x+y
+		}
+		close(c)
+	}
+
+	c2 := make(chan int, 10)
+	go fibonacci2(cap(c2), c2)
+	for i := range c2 {
+		fmt.Println(i)
+	}
+
+	x4, ok := <-c2
+	fmt.Printf("x4: %v, ok: %v\n", x4, ok)
+
+	fibonacci3 := func(c, quit chan int) {
+		x, y := 0, 1
+		for {
+			select {
+			case c <- x:
+				x, y = y, x+y
+			case <-quit:
+				fmt.Println("quit")
+				return
+			}
+		}
+	}
+
+	c3 := make(chan int)
+	quit := make(chan int)
+	go func() {
+		for i := 0; i < 10; i++ {
+			fmt.Println(<-c3)
+		}
+		quit <- 0
+	}()
+	fibonacci3(c3, quit)
+
+	tick := time.Tick(1000 * time.Millisecond)
+	boom := time.After(5000 * time.Millisecond)
+
+Awaiter:
+	for {
+		select {
+		case <-tick:
+			fmt.Println("tick.")
+		case <-boom:
+			fmt.Println("BOOM!")
+			break Awaiter
+		default:
+			fmt.Println("    .")
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	ch := make(chan int)
+	go Walk(tree.New(1), ch)
+	fmt.Print("Tree: ")
+	for i := range ch {
+		fmt.Print(i, " ")
+	}
+	fmt.Println()
+
+	fmt.Println("Same(tree.New(1), tree.New(1))", Same(tree.New(1), tree.New(1)))
+	fmt.Println("Same(tree.New(1), tree.New(2))", Same(tree.New(1), tree.New(2)))
+	t1trim := tree.New(1)
+	t1trim.Right = nil
+	ch2 := make(chan int)
+	go Walk(t1trim, ch2)
+	fmt.Print("Tree t1trim: ")
+	for i := range ch2 {
+		fmt.Print(i, " ")
+	}
+	fmt.Println()
+	fmt.Println("Same(tree.New(1), t1trim)", Same(tree.New(1), t1trim))
+
+	slice2 := []int{1, 2, 3}
+	fmt.Printf("slice2: %v\n", slice2)
+
+	array2 := [...]int{1, 2, 3}
+	fmt.Printf("array2: %v\n", array2)
 }

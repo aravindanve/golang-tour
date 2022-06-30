@@ -10,5 +10,8 @@
 - https://golangbyexample.com/typed-untyped-constant-golang/
 - https://go.dev/blog/defer-panic-and-recover
 - https://talks.golang.org/2012/splash.article
+- https://golangdocs.com/interfaces-in-golang
+- https://yourbasic.org/golang/default-zero-value/
+- https://go.dev/blog/slices-intro
 
 - https://golangbyexample.com/
