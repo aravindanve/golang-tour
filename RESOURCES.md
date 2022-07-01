@@ -15,5 +15,7 @@
 - https://yourbasic.org/golang/default-zero-value/
 - https://go.dev/blog/slices-intro
 - https://go.dev/doc/effective_go
-- https://go.dev/ref/spec
 - https://go.dev/doc/faq
+- https://go.dev/ref/spec
+- https://www.youtube.com/watch?v=f6kdp27TYZs # Google I/O 2012 - Go Concurrency Patterns
+- https://www.youtube.com/watch?v=QDDwwePbDtw # Google I/O 2013 - Advanced Go Concurrency Patterns
