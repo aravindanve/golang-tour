@@ -873,12 +873,12 @@ func main() {
 	c1 := make(chan string, 2)
 
 	go func() {
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(time.Second)
 		c1 <- "hello after sometime!"
 	}()
 
 	go func() {
-		time.Sleep(2000 * time.Millisecond)
+		time.Sleep(2 * time.Second)
 		c1 <- "hello after more time!"
 	}()
 
@@ -926,8 +926,8 @@ func main() {
 	}()
 	fibonacci3(c3, quit)
 
-	tick := time.Tick(1000 * time.Millisecond)
-	boom := time.After(5000 * time.Millisecond)
+	tick := time.Tick(500 * time.Millisecond)
+	boom := time.After(2 * time.Second)
 
 Awaiter:
 	for {
@@ -972,5 +972,19 @@ Awaiter:
 
 	Crawl("https://golang.org/", 4, fetcher)
 	crawlWg.Wait()
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(time.Second)
+
+	c4 := make(chan string)
+	for i := 0; i < 5; i++ {
+		go func(i int) {
+			fmt.Printf("%v waiting...\n", i)
+			msg := <-c4
+			c4 <- fmt.Sprintf("%v + %v", msg, i)
+
+		}(i)
+	}
+
+	time.Sleep(time.Second)
+	c4 <- "start"
+	fmt.Println(<-c4)
 }
