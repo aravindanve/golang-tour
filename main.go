@@ -11,6 +11,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/tour/tree"
@@ -252,6 +253,108 @@ func Same(t1, t2 *tree.Tree) bool {
 			return false
 		}
 	}
+}
+
+type Fetcher interface {
+	// Fetch returns the body of URL and
+	// a slice of URLs found on that page.
+	Fetch(url string) (body string, urls []string, err error)
+}
+
+type Seen struct {
+	mut  sync.Mutex
+	urls map[string]bool
+}
+
+func (s *Seen) Has(url string) bool {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	return s.urls[url]
+}
+
+func (s *Seen) Set(url string) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	s.urls[url] = true
+}
+
+var seen = &Seen{urls: make(map[string]bool)}
+var crawlWg = sync.WaitGroup{}
+
+// Crawl uses fetcher to recursively crawl
+// pages starting with url, to a maximum of depth.
+func Crawl(url string, depth int, fetcher Fetcher) {
+	crawlWg.Add(1)
+	defer crawlWg.Done()
+
+	if depth <= 0 {
+		return
+	}
+	// Don't fetch the same URL twice.
+	if seen.Has(url) {
+		return
+	}
+	seen.Set(url)
+
+	body, urls, err := fetcher.Fetch(url)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("found: %s %q\n", url, body)
+	for _, u := range urls {
+		// Fetch URLs in parallel.
+		go Crawl(u, depth-1, fetcher)
+	}
+}
+
+// fakeFetcher is Fetcher that returns canned results.
+type fakeFetcher map[string]*fakeResult
+
+type fakeResult struct {
+	body string
+	urls []string
+}
+
+func (f fakeFetcher) Fetch(url string) (string, []string, error) {
+	if res, ok := f[url]; ok {
+		return res.body, res.urls, nil
+	}
+	return "", nil, fmt.Errorf("not found: %s", url)
+}
+
+// fetcher is a populated fakeFetcher.
+var fetcher = fakeFetcher{
+	"https://golang.org/": &fakeResult{
+		"The Go Programming Language",
+		[]string{
+			"https://golang.org/pkg/",
+			"https://golang.org/cmd/",
+		},
+	},
+	"https://golang.org/pkg/": &fakeResult{
+		"Packages",
+		[]string{
+			"https://golang.org/",
+			"https://golang.org/cmd/",
+			"https://golang.org/pkg/fmt/",
+			"https://golang.org/pkg/os/",
+		},
+	},
+	"https://golang.org/pkg/fmt/": &fakeResult{
+		"Package fmt",
+		[]string{
+			"https://golang.org/",
+			"https://golang.org/pkg/",
+		},
+	},
+	"https://golang.org/pkg/os/": &fakeResult{
+		"Package os",
+		[]string{
+			"https://golang.org/",
+			"https://golang.org/pkg/",
+		},
+	},
 }
 
 func main() {
@@ -866,4 +969,8 @@ Awaiter:
 
 	array2 := [...]int{1, 2, 3}
 	fmt.Printf("array2: %v\n", array2)
+
+	Crawl("https://golang.org/", 4, fetcher)
+	crawlWg.Wait()
+	time.Sleep(1000 * time.Millisecond)
 }
