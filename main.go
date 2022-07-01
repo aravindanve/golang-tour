@@ -357,6 +357,10 @@ var fetcher = fakeFetcher{
 	},
 }
 
+func Identity[T interface{ ~int | ~string }](t T) T {
+	return t
+}
+
 func main() {
 	var i = 42
 	var f = float64(i)
@@ -987,4 +991,12 @@ Awaiter:
 	time.Sleep(time.Second)
 	c4 <- "start"
 	fmt.Println(<-c4)
+
+	var _ int = Identity(1)
+	var _ string = Identity("hello")
+
+	{
+		fmt.Println("From a block")
+	}
+
 }
